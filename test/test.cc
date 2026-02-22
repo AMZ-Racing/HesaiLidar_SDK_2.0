@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
   // assign param
 #ifdef LIDAR_PARSER_TEST
   param.input_param.source_type = DATA_FROM_LIDAR;
-  param.input_param.device_ip_address = "192.168.1.201";  // lidar ip
+  param.input_param.device_ip_address = "192.168.0.10";  // lidar ip
   param.input_param.ptc_port = 9347; // lidar ptc port
   param.input_param.udp_port = 2368; // point cloud destination port
   param.input_param.multicast_ip_address = "";
@@ -93,14 +93,14 @@ int main(int argc, char *argv[])
   
 #elif defined (PCAP_PARSER_TEST)
   param.input_param.source_type = DATA_FROM_PCAP;
-  param.input_param.pcap_path = "Your pcap file path";
-  param.input_param.correction_file_path = "Your correction file path";
-  param.input_param.firetimes_path = "Your firetime file path";
+  param.input_param.pcap_path = "/workspace/data/outputOT128.pcap"; // pcap file path
+  param.input_param.correction_file_path = "/workspace/data/OT128correction.csv"; // correction file path
+  param.input_param.firetimes_path = "/workspace/data/OT128correction_firetime.csv";
 
 
   param.decoder_param.pcap_play_synchronization = true;
   param.decoder_param.play_rate_ = 1.0;
-  param.decoder_param.pcap_play_in_loop = false; // pcap palyback
+  param.decoder_param.pcap_play_in_loop = true; // pcap palyback
 
 #elif defined (EXTERNAL_INPUT_PARSER_TEST)
   param.input_param.source_type = DATA_FROM_ROS_PACKET;

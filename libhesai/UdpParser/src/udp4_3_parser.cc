@@ -222,6 +222,12 @@ int Udp4_3Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
     this->CircleRevise(elevation);
     if (this->IsChannelFovFilter(azimuth / kAllFineResolutionInt, channel_index, frame.fParam) == 1) return;
     
+    // Changes MK:
+    // Add point to depth image here 
+    // add something like set_image(ptinfo, distance)
+    // this will set the pixel for the respective elevation and azimuth in the image matrix
+    // I will also have to add an image field to the frame
+
     float xyDistance = distance * this->cos_all_angle_[(elevation)];
     float x = xyDistance * this->sin_all_angle_[(azimuth)];
     float y = xyDistance * this->cos_all_angle_[(azimuth)];
