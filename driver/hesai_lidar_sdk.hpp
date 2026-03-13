@@ -42,6 +42,8 @@ private:
   std::thread *runing_thread_ptr_;
   std::function<void(const UdpFrame_t&, double)> pkt_cb_;
   std::function<void(const LidarDecodedFrame<T_Point>&)> point_cloud_cb_;
+  std::function<void(const LidarDecodedFrame<T_Point>&)> depth_img_cb_;
+  std::function<void(const LidarDecodedFrame<T_Point>&)> intensity_img_cb_;
   std::function<void(const u8Array_t&)> correction_cb_;
   std::function<void(const uint32_t &, const uint32_t &)> pkt_loss_cb_;
   std::function<void(const uint8_t&, const u8Array_t&)> ptp_cb_;
@@ -433,6 +435,8 @@ public:
   // assign callback fuction
   void RegRecvCallback(const std::function<void(const LidarDecodedFrame<T_Point>&)>& callback) {
     point_cloud_cb_ = callback;
+    // depth_img_cb_ = callback;
+    // intensity_img_cb_ = callback;
   }
 
   // assign callback fuction

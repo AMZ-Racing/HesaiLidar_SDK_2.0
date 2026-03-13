@@ -221,12 +221,20 @@ int Udp4_3Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
     this->CircleRevise(azimuth);
     this->CircleRevise(elevation);
     if (this->IsChannelFovFilter(azimuth / kAllFineResolutionInt, channel_index, frame.fParam) == 1) return;
-    
-    // Changes MK:
-    // Add point to depth image here 
-    // add something like set_image(ptinfo, distance)
-    // this will set the pixel for the respective elevation and azimuth in the image matrix
-    // I will also have to add an image field to the frame
+
+    // Write to depth/intensity images
+    const auto& rc = frame.fParam.remake_config;
+    if (rc.flag && !frame.depth_img.empty()) {
+      float azi_deg = azimuth / kAllFineResolutionFloat;
+      float elev_deg = elevation / kAllFineResolutionFloat;
+      elev_deg = elev_deg > 180.0f ? elev_deg - 360.0f : elev_deg;
+      int col = static_cast<int>((azi_deg - rc.min_azi) / rc.ring_azi_resolution);
+      int row = static_cast<int>((elev_deg - rc.min_elev) / rc.ring_elev_resolution);
+      if (col >= 0 && col < rc.max_azi_scan && row >= 0 && row < rc.max_elev_scan) {
+        frame.depth_img.template at<float>(row, col) = distance;
+        frame.intensity_img.template at<uint8_t>(row, col) = reflectivity;
+      }
+    }
 
     float xyDistance = distance * this->cos_all_angle_[(elevation)];
     float x = xyDistance * this->sin_all_angle_[(azimuth)];
@@ -336,6 +344,7 @@ int Udp4_3Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
     frame.laser_num = pHeader->GetLaserNum();
     frame.per_points_num = pHeader->GetBlockNum() * pHeader->GetLaserNum();
     frame.distance_unit = pHeader->GetDistUnit();
+
     if (frame.block_num < 1) {
       LogFatal("block_num(%u) is error", frame.block_num);
       return -1;
@@ -348,6 +357,16 @@ int Udp4_3Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
       LogFatal("laser_num(%u) out of %d", frame.laser_num, AT::AT_MAX_CHANNEL_NUM);
       return -1;
     }
+
+    // Init depth image and intensity image sized to the FOV defined by remake_config
+    const auto& rc = frame.fParam.remake_config;
+    if (rc.flag && rc.max_elev_scan > 0 && rc.max_azi_scan > 0) {
+      frame.depth_img.create(rc.max_elev_scan, rc.max_azi_scan, CV_32FC1);
+      frame.depth_img.setTo(0.0f);
+      frame.intensity_img.create(rc.max_elev_scan, rc.max_azi_scan, CV_8UC1);
+      frame.intensity_img.setTo(0);
+    }
+
     frame.frame_init_ = true;
   }
   if (pHeader->GetBlockNum() != frame.block_num

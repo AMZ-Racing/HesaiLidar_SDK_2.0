@@ -61,7 +61,11 @@ if(WITH_PTCCLIENT)
     endif(WITH_PTCS_USE)
 endif(WITH_PTCCLIENT)
 
-find_package(Threads REQUIRED)  
+find_package(Threads REQUIRED)
+find_package(OpenCV REQUIRED)
+if(OpenCV_FOUND)
+    include_directories(${OpenCV_INCLUDE_DIRS})
+endif()
 
 include_directories(
     ./
@@ -215,7 +219,8 @@ if (WITH_LIDARLIB)
         ptcClient_lib
         source_lib
         serialClient_lib
-        ${CMAKE_THREAD_LIBS_INIT})
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${OpenCV_LIBS})
     if(WITH_UDPPARSERGPU)
         target_link_libraries(lidar_lib
             udpParserGpu_lib)
@@ -225,6 +230,7 @@ if (WITH_LIDARLIB)
     target_include_directories(lidar_lib PUBLIC   
         Lidar
         ./
+        ${OpenCV_INCLUDE_DIRS}
     )
     
     

@@ -35,7 +35,7 @@ namespace hesai
 namespace lidar
 {
 
-#define NULL_TOPIC  "your topic name"
+#define NULL_TOPIC  "your_topic_name"
 
 enum SourceType
 {
@@ -148,10 +148,14 @@ typedef struct InputParam
   bool send_packet_ros;
   bool send_point_cloud_ros;
   bool send_imu_ros;
+  bool send_depth_image_ros;
+  bool send_intensity_image_ros;
   std::string frame_id;
 
   std::string ros_send_packet_topic = NULL_TOPIC;
   std::string ros_send_point_topic = NULL_TOPIC;
+  std::string ros_send_depth_image_topic = NULL_TOPIC;
+  std::string ros_send_intensity_image_topic = NULL_TOPIC;
   std::string ros_send_packet_loss_topic = NULL_TOPIC; 
   std::string ros_send_ptp_topic = NULL_TOPIC;
   std::string ros_send_correction_topic = NULL_TOPIC;
