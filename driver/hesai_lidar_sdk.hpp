@@ -412,6 +412,12 @@ namespace hesai
             {
               std::fill_n(lidar_ptr_->frame_.points, lidar_ptr_->frame_.maxPacketPerFrame * lidar_ptr_->frame_.maxPointPerPacket, T_Point{});
             }
+            if (!lidar_ptr_->frame_.depth_img.empty()) {
+              lidar_ptr_->frame_.depth_img.setTo(0.0f);
+            }
+            if (!lidar_ptr_->frame_.intensity_img.empty()) {
+              lidar_ptr_->frame_.intensity_img.setTo(0);
+            }
             // clear udp packet vector
             resetFrame(packet_index, udp_packet_frame);
 
