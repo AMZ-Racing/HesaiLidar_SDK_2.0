@@ -432,6 +432,20 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       if (this->get_firetime_file_) {
         timestamp += block_ns_offset + GetFiretimes(channel_index, pTail->getOperationMode(), angleState, pChnUnit->GetDistance() * frame.distance_unit);
       }
+      // Write to depth/intensity images if remake enabled (similar to 4_3 parser)
+      const auto& rc = frame.fParam.remake_config;
+      if (rc.flag && !frame.depth_img.empty()) {
+        float azi_deg = azimuth / kAllFineResolutionFloat;
+        float elev_deg = elevation / kAllFineResolutionFloat;
+        elev_deg = elev_deg > 180.0f ? elev_deg - 360.0f : elev_deg;
+        int col = static_cast<int>((azi_deg - rc.min_azi) / rc.ring_azi_resolution);
+        int row = static_cast<int>((elev_deg - rc.min_elev) / rc.ring_elev_resolution);
+        if (col >= 0 && col < rc.max_azi_scan && row >= 0 && row < rc.max_elev_scan) {
+          frame.depth_img.template at<float>(row, col) = distance;
+          frame.intensity_img.template at<uint8_t>(row, col) = pChnUnit->GetReflectivity();
+        }
+      }
+
       float xyDistance = distance * this->cos_all_angle_[(elevation)];
       float x = xyDistance * this->sin_all_angle_[(azimuth)];
       float y = xyDistance * this->cos_all_angle_[(azimuth)];
@@ -489,6 +503,14 @@ int Udp1_4Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
     if (frame.laser_num > DEFAULT_MAX_LASER_NUM) {
       LogFatal("laser_num(%u) out of %d", frame.laser_num, DEFAULT_MAX_LASER_NUM);
       return -1;
+    }
+    // Init depth/intensity images if remake_config requests it (borrowed from 4_3 parser)
+    const auto& rc = frame.fParam.remake_config;
+    if (rc.flag && rc.max_elev_scan > 0 && rc.max_azi_scan > 0) {
+      frame.depth_img.create(rc.max_elev_scan, rc.max_azi_scan, CV_32FC1);
+      frame.depth_img.setTo(0.0f);
+      frame.intensity_img.create(rc.max_elev_scan, rc.max_azi_scan, CV_8UC1);
+      frame.intensity_img.setTo(0);
     }
     frame.frame_init_ = true;
   }
