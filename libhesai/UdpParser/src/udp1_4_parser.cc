@@ -49,7 +49,7 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
     this->optical_center.setNoFlag(LidarOpticalCenter{-0.0076, 0.01367, 0.01274});
   }
   /* JT128 end */
-  if (lidar_type == STR_PANDARN || lidar_type == STR_OT128) {
+  if (lidar_type == STR_PANDARN) {
     this->default_remake_config.min_azi = 0.f;
     this->default_remake_config.max_azi = 360.f;
     this->default_remake_config.ring_azi_resolution = 0.1f;
@@ -58,6 +58,17 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
     this->default_remake_config.max_elev = 15.f;
     this->default_remake_config.ring_elev_resolution = 0.125f;
     this->default_remake_config.max_elev_scan = 320;   // (max_elev - min_elev) / ring_elev_resolution
+  }
+  else if (lidar_type == STR_OT128) {
+    this->default_remake_config.min_azi = 0.f;
+    this->default_remake_config.max_azi = 360.f;
+    this->default_remake_config.ring_azi_resolution = 0.1f;
+    this->default_remake_config.max_azi_scan = 3600;   // dynamic updates happen at runtime
+    this->default_remake_config.min_elev = -25.f;
+    this->default_remake_config.max_elev = 15.f;
+    // OT128 uses 128 channels, so keep one vertical bin per channel by default.
+    this->default_remake_config.ring_elev_resolution = 0.3125f;
+    this->default_remake_config.max_elev_scan = 128;
   }
   /* JT128 begin */ 
   else if (lidar_type == STR_OTHER) {
@@ -486,6 +497,42 @@ int Udp1_4Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
       reinterpret_cast<const HS_LIDAR_HEADER_ME_V4 *>(
           udpPacket.buffer + sizeof(HS_LIDAR_PRE_HEADER));
 
+  auto infer_azimuth_resolution_deg = [&]() -> float {
+    if (pHeader->GetBlockNum() < 2) {
+      return 0.0f;
+    }
+
+    uint16_t min_delta = 0xFFFF;
+    bool has_prev = false;
+    uint16_t prev_azimuth = 0;
+    const int unit_size = pHeader->unitSize();
+
+    for (int blockid = 0; blockid < pHeader->GetBlockNum(); ++blockid) {
+      const HS_LIDAR_BODY_AZIMUTH_ME_V4 *p_block_azimuth =
+          reinterpret_cast<const HS_LIDAR_BODY_AZIMUTH_ME_V4 *>(
+              (const unsigned char *)pHeader + sizeof(HS_LIDAR_HEADER_ME_V4) +
+              (sizeof(HS_LIDAR_BODY_AZIMUTH_ME_V4) + unit_size * pHeader->GetLaserNum()) * blockid);
+      uint16_t current_azimuth = p_block_azimuth->GetAzimuth();
+
+      if (has_prev) {
+        uint16_t delta = (current_azimuth >= prev_azimuth)
+                             ? static_cast<uint16_t>(current_azimuth - prev_azimuth)
+                             : static_cast<uint16_t>(current_azimuth + CIRCLE_ANGLE - prev_azimuth);
+        if (delta > 0 && delta < min_delta) {
+          min_delta = delta;
+        }
+      }
+
+      prev_azimuth = current_azimuth;
+      has_prev = true;
+    }
+
+    if (min_delta == 0xFFFF) {
+      return 0.0f;
+    }
+    return static_cast<float>(min_delta) / 100.0f;  // azimuth unit is 0.01 degree
+  };
+
   if (frame.frame_init_ == false) {
     frame.block_num = pHeader->GetBlockNum();
     frame.laser_num = pHeader->GetLaserNum();
@@ -499,8 +546,44 @@ int Udp1_4Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
       LogFatal("laser_num(%u) out of %d", frame.laser_num, DEFAULT_MAX_LASER_NUM);
       return -1;
     }
+
+    auto& rc = frame.fParam.remake_config;
+    if (rc.flag && this->lidar_type_ == STR_OT128) {
+      // Keep one row per channel.
+      rc.max_elev_scan = frame.laser_num;
+      if (rc.max_elev_scan < 1) {
+        rc.max_elev_scan = 1;
+      }
+      float elev_span = rc.max_elev - rc.min_elev;
+      if (elev_span > 0.f) {
+        rc.ring_elev_resolution = elev_span / static_cast<float>(rc.max_elev_scan);
+      }
+
+      // Infer horizontal spacing from actual packet azimuth steps (10Hz vs 20Hz, etc.).
+      float inferred_azi_resolution = infer_azimuth_resolution_deg();
+      if (inferred_azi_resolution > 0.f) {
+        rc.ring_azi_resolution = inferred_azi_resolution;
+
+        float azi_span = rc.max_azi - rc.min_azi;
+        if (azi_span <= 0.f) {
+          azi_span = this->default_remake_config.max_azi - this->default_remake_config.min_azi;
+        }
+        if (azi_span > 0.f) {
+          rc.max_azi_scan = static_cast<int>(azi_span / inferred_azi_resolution + 0.5f);
+          if (rc.max_azi_scan < 1) {
+            rc.max_azi_scan = 1;
+          }
+        }
+
+        // Keep defaults aligned for future frames.
+        this->default_remake_config.ring_azi_resolution = rc.ring_azi_resolution;
+        this->default_remake_config.max_azi_scan = rc.max_azi_scan;
+      }
+      this->default_remake_config.ring_elev_resolution = rc.ring_elev_resolution;
+      this->default_remake_config.max_elev_scan = rc.max_elev_scan;
+    }
+
     // Init depth/intensity images if remake_config requests it (borrowed from 4_3 parser)
-    const auto& rc = frame.fParam.remake_config;
     if (rc.flag && rc.max_elev_scan > 0 && rc.max_azi_scan > 0) {
       frame.depth_img.create(rc.max_elev_scan, rc.max_azi_scan, CV_32FC1);
       frame.depth_img.setTo(0.0f);
