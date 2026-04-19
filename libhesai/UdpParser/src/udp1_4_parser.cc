@@ -34,6 +34,20 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "udp1_4_parser.h"
 
+#ifdef HESAI_EASY_PROFILER
+#include <easy/profiler.h>
+#else
+#ifndef EASY_FUNCTION
+#define EASY_FUNCTION(...)
+#endif
+#ifndef EASY_BLOCK
+#define EASY_BLOCK(...)
+#endif
+#ifndef EASY_END_BLOCK
+#define EASY_END_BLOCK
+#endif
+#endif
+
 using namespace hesai::lidar;
 template<typename T_Point>
 Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
@@ -346,6 +360,7 @@ double Udp1_4Parser<T_Point>::GetFiretimesCorrection(int laserId, double speed, 
 
 template<typename T_Point>
 int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32_t packet_index) {
+  EASY_FUNCTION("Udp1_4Parser::ComputeXYZI");
   if (packet_index >= frame.maxPacketPerFrame || frame.point_cloud_raw_data == nullptr) {
     LogFatal("packet_index(%d) out of %d. or data ptr is nullptr", packet_index, frame.maxPacketPerFrame);
     GeneralParser<T_Point>::FrameNumAdd();
@@ -367,6 +382,7 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
   int point_num = 0;
   auto& packetData = frame.packetData[packet_index];
   int32_t block_ns_offset = 0;
+  EASY_BLOCK("ComputeXYZI.PointLoop");
   for (int blockid = 0; blockid < frame.block_num; blockid++) {
     int current_block_echo_count = ((pHeader->GetEchoCount() > 0 && pHeader->GetEchoNum() > 0) ?
             ((pHeader->GetEchoCount() - 1 + blockid) % pHeader->GetEchoNum() + 1) : 0);
@@ -457,6 +473,7 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       }
     }
   }
+  EASY_END_BLOCK;
   frame.valid_points[packet_index] = point_num;
   GeneralParser<T_Point>::FrameNumAdd();
   return 0;
@@ -465,6 +482,7 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
 template<typename T_Point>
 int Udp1_4Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const UdpPacket& udpPacket, const int packet_index)
 {
+  EASY_FUNCTION("Udp1_4Parser::DecodePacket");
   uint32_t packet_index_use = (packet_index >= 0 ? packet_index : frame.packet_num);
   if (udpPacket.buffer[0] != 0xEE || udpPacket.buffer[1] != 0xFF ||
       udpPacket.buffer[2] != 1 || udpPacket.buffer[3] != 4) {
@@ -591,7 +609,9 @@ int Udp1_4Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
     LogFatal("point cloud size is should be %d, but is %d", frame.point_cloud_size, packet_size);
     return -1;
   }
+  EASY_BLOCK("DecodePacket.CopyRawPacket");
   memcpy(frame.point_cloud_raw_data + packet_index_use * frame.point_cloud_size, udpPacket.buffer, packet_size);
+  EASY_END_BLOCK;
   frame.packet_num++;
   return 0;
 }

@@ -85,6 +85,16 @@ if(WITH_UDPPARSER)
         ./
         ../algorithm
     ) 
+    if(HESAI_EASY_PROFILER_FOUND)
+        get_filename_component(EASY_PROFILER_LIB_DIR ${EASY_PROFILER_LIBRARY} DIRECTORY)
+        target_include_directories(udpParser_lib PRIVATE ${EASY_PROFILER_INCLUDE_DIR})
+        target_link_libraries(udpParser_lib ${EASY_PROFILER_LIBRARY})
+        target_compile_definitions(udpParser_lib PRIVATE HESAI_EASY_PROFILER=1 BUILD_WITH_EASY_PROFILER=1)
+        set_target_properties(udpParser_lib PROPERTIES
+            BUILD_RPATH ${EASY_PROFILER_LIB_DIR}
+            INSTALL_RPATH ${EASY_PROFILER_LIB_DIR}
+        )
+    endif()
     if(WITH_UDPPARSERGPU)
         add_library(udpParserGpu_lib 
             UdpParserGpu/udp_parser_gpu.cu
