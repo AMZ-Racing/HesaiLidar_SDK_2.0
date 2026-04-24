@@ -59,6 +59,7 @@ Udp1_4Parser<T_Point>::Udp1_4Parser(std::string lidar_type) {
     this->default_remake_config.ring_elev_resolution = 0.125f;
     this->default_remake_config.max_elev_scan = 320;   // (max_elev - min_elev) / ring_elev_resolution
   }
+  // TODO: Check if necessary
   else if (lidar_type == STR_OT128) {
     this->default_remake_config.min_azi = 0.f;
     this->default_remake_config.max_azi = 360.f;
@@ -452,10 +453,12 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       GeneralParser<T_Point>::DoRemake(azimuth, elevation, frame.fParam.remake_config, point_index_rerank); 
       if(point_index_rerank >= 0) { 
         const auto& rc = frame.fParam.remake_config;
+        // Map azi/elev to depth image
+        // TODO: Maybe also check for reflectivity img? 
         if (rc.flag && !frame.depth_img.empty()) {
           int col = point_index_rerank / rc.max_elev_scan;
           int row = point_index_rerank % rc.max_elev_scan;
-          if (col >= 0 && col < rc.max_azi_scan && row >= 0 && row < rc.max_elev_scan) {
+          if (col >= 0 && col < rc.max_azi_scan && row >= 0 && row < rc.max_elev_scan) {  // Make sure to take dynamic frame resizing into account
             frame.depth_img.template at<float>(row, col) = distance;
             frame.intensity_img.template at<uint8_t>(row, col) = pChnUnit->GetReflectivity();
           }
@@ -497,6 +500,7 @@ int Udp1_4Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
       reinterpret_cast<const HS_LIDAR_HEADER_ME_V4 *>(
           udpPacket.buffer + sizeof(HS_LIDAR_PRE_HEADER));
 
+  // TODO: Make cleaner implementation?
   auto infer_azimuth_resolution_deg = [&]() -> float {
     if (pHeader->GetBlockNum() < 2) {
       return 0.0f;
@@ -547,6 +551,7 @@ int Udp1_4Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
       return -1;
     }
 
+    // TODO: Make cleaner more generic implementation
     auto& rc = frame.fParam.remake_config;
     if (rc.flag && this->lidar_type_ == STR_OT128) {
       // Keep one row per channel.

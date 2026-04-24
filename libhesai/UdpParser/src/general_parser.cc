@@ -541,6 +541,7 @@ void GeneralParser<T_Point>::setRemakeDefaultConfig(LidarDecodedFrame<T_Point> &
   if (rq.max_azi < 0) rq.max_azi = default_remake_config.max_azi;
   if (rq.ring_azi_resolution < 0) rq.ring_azi_resolution = default_remake_config.ring_azi_resolution;
   if (rq.max_azi_scan < 0) {
+    // Dynamic image scaling according to params
     float azi_span = rq.max_azi - rq.min_azi;
     if (azi_span > 0.f && rq.ring_azi_resolution > 0.f) {
       rq.max_azi_scan = static_cast<int>(azi_span / rq.ring_azi_resolution + 0.5f);
