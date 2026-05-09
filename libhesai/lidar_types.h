@@ -48,6 +48,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "driver_param.h"
 #include "logger.h"
 #include <fstream>
+#include <opencv2/core.hpp>
 namespace hesai
 {
 namespace lidar
