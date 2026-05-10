@@ -39,6 +39,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #include <stdio.h>
 #include <chrono>
+#include <easy/profiler.h>
 #include "lidar_types.h"
 #include "ptc_client.h"
 #include "tcp_client.h"
@@ -862,7 +863,9 @@ private:
         continue;
       }
       if (handle_thread_count_ < 2) {
+        EASY_BLOCK("SDK::ComputeXYZI", profiler::colors::Yellow);
         udp_parser_->ComputeXYZI(frame_, decoded_packet_index);
+        EASY_END_BLOCK;
         continue;
       } else {
         nUDPCount = nUDPCount % handle_thread_count_;
@@ -900,7 +903,10 @@ private:
         int decoded_packet_index = handle_thread_packet_buffer_[nThreadNum].front();
         handle_thread_packet_buffer_[nThreadNum].pop_front();
         lock.unlock();
-        udp_parser_->ComputeXYZI(frame_, decoded_packet_index);
+        {
+          EASY_BLOCK("SDK::ComputeXYZI", profiler::colors::Yellow);
+          udp_parser_->ComputeXYZI(frame_, decoded_packet_index);
+        }
         lock.lock();
       }
     }
