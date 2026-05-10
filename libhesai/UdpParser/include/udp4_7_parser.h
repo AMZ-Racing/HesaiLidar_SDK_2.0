@@ -31,6 +31,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "general_parser.h"
 #include "udp_protocol_v4_7.h"
+#include <easy/profiler.h>
 namespace hesai
 {
 namespace lidar
@@ -371,6 +372,7 @@ int Udp4_7Parser<T_Point>::getDisplay(bool **display) {
 
 template<typename T_Point>
 int Udp4_7Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32_t packet_index) {
+  EASY_FUNCTION(profiler::colors::Yellow);
   if (packet_index >= frame.maxPacketPerFrame || frame.point_cloud_raw_data == nullptr) {
     LogFatal("packet_index(%d) out of %d. or data ptr is nullptr", packet_index, frame.maxPacketPerFrame);
     GeneralParser<T_Point>::FrameNumAdd();
@@ -538,6 +540,7 @@ int Udp4_7Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
     }
     frame.frame_init_ = true;
     {
+      EASY_BLOCK("Udp4_7::ImageInit", profiler::colors::Orange);
       const auto& rc = frame.fParam.remake_config;
       int img_rows = static_cast<int>(frame.laser_num);
       if (rc.flag && img_rows > 0 && rc.max_azi_scan > 0) {
