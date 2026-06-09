@@ -21,9 +21,6 @@ namespace lidar
   };
 #define PANDAR_HAS_MEMBER(C, member) has_##member<C>::value
 
-// Changes MK:
-// Add a macro to set and get the image field in some kind of image struct
-
 #define DEFINE_SET_GET(member, Type)                                                                                   \
   template <typename T_Point>                                                                                          \
   inline typename std::enable_if<!PANDAR_HAS_MEMBER(T_Point, member)>::type set_##member(T_Point& point, const Type& value) \

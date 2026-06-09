@@ -37,7 +37,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "general_parser.h"
 #include "udp_protocol_v4_3.h"
-#include <easy/profiler.h>
 namespace hesai
 {
 namespace lidar
@@ -230,7 +229,6 @@ bool Udp4_3Parser<T_Point>::IsNeedFrameSplit(uint16_t azimuth) {
 
 template<typename T_Point>
 int Udp4_3Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32_t packet_index) {
-  EASY_FUNCTION(profiler::colors::Yellow);
   if (packet_index >= frame.maxPacketPerFrame || frame.point_cloud_raw_data == nullptr) {
     LogFatal("packet_index(%d) out of %d. or data ptr is nullptr", packet_index, frame.maxPacketPerFrame);
     GeneralParser<T_Point>::FrameNumAdd();
@@ -396,7 +394,6 @@ int Udp4_3Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
     }
     frame.frame_init_ = true;
     {
-      EASY_BLOCK("Udp4_3::ImageInit", profiler::colors::Orange);
       const auto& rc = frame.fParam.remake_config;
       if (rc.flag && rc.max_elev_scan > 0 && rc.max_azi_scan > 0) {
         frame.depth_img.create(rc.max_elev_scan, rc.max_azi_scan, CV_32FC1);
