@@ -59,6 +59,10 @@ endif(MSVC)
 # 公共依赖
 # ============================================
 find_package(Threads REQUIRED)
+find_package(OpenCV REQUIRED)
+if(OpenCV_FOUND)
+    include_directories(${OpenCV_INCLUDE_DIRS})
+endif()
 
 # 公共头文件目录
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

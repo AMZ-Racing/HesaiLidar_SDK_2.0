@@ -48,6 +48,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "driver_param.h"
 #include "logger.h"
 #include <fstream>
+#include <opencv2/core.hpp>
 namespace hesai
 {
 namespace lidar
@@ -517,6 +518,9 @@ class LidarDecodedFrame
     PointT* points = nullptr;
     //special output
     LidarImuData imu_config;
+    // Image output
+    cv::Mat depth_img;
+    cv::Mat intensity_img;
     // point cloud raw data
     bool frame_init_ = false;
     uint32_t point_cloud_size = 0;

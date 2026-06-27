@@ -269,13 +269,22 @@ int Udp4_3Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
 
     int point_index_rerank = point_index + point_num; 
     GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index, frame.fParam.remake_config, point_index_rerank); 
-    if(point_index_rerank >= 0) { 
-      auto& ptinfo = frame.points[point_index_rerank]; 
-      set_x(ptinfo, x); 
-      set_y(ptinfo, y); 
-      set_z(ptinfo, z); 
-      set_ring(ptinfo, channel_index); 
-      set_intensity(ptinfo, reflectivity);  
+    if(point_index_rerank >= 0) {
+      const auto& rc = frame.fParam.remake_config;
+      if (rc.flag && !frame.depth_img.empty()) {
+        int col = point_index_rerank / rc.max_elev_scan;
+        int row = channel_index;
+        if (row < frame.depth_img.rows && col < frame.depth_img.cols) {
+          frame.depth_img.template at<float>(row, col) = distance;
+          frame.intensity_img.template at<uint8_t>(row, col) = static_cast<uint8_t>(reflectivity);
+        }
+      }
+      auto& ptinfo = frame.points[point_index_rerank];
+      set_x(ptinfo, x);
+      set_y(ptinfo, y);
+      set_z(ptinfo, z);
+      set_ring(ptinfo, channel_index);
+      set_intensity(ptinfo, reflectivity); 
       set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
       set_confidence(ptinfo, confidence);
       set_azimuth(ptinfo, azimuth_in); 
@@ -386,6 +395,16 @@ int Udp4_3Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
       return -1;
     }
     frame.frame_init_ = true;
+    {
+      const auto& rc = frame.fParam.remake_config;
+      int img_rows = static_cast<int>(frame.laser_num);
+      if (rc.flag && img_rows > 0 && rc.max_azi_scan > 0) {
+        frame.depth_img.create(img_rows, rc.max_azi_scan, CV_32FC1);
+        frame.depth_img.setTo(0.0f);
+        frame.intensity_img.create(img_rows, rc.max_azi_scan, CV_8UC1);
+        frame.intensity_img.setTo(0);
+      }
+    }
   }
   if (pHeader->GetBlockNum() != frame.block_num
       || pHeader->GetLaserNum() != frame.laser_num

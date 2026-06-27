@@ -46,6 +46,8 @@ private:
   std::function<void(const UdpFrame_t&, double)> pkt_cb_;
   std::function<void(const UdpPacket&, double)> every_pkt_cb_;
   std::function<void(const LidarDecodedFrame<T_Point>&)> point_cloud_cb_;
+  std::function<void(const LidarDecodedFrame<T_Point> &)> depth_img_cb_;
+  std::function<void(const LidarDecodedFrame<T_Point> &)> intensity_img_cb_;
   std::function<void(const u8Array_t&)> correction_cb_;
   std::function<void(const uint32_t &, const uint32_t &)> pkt_loss_cb_;
   std::function<void(const uint8_t&, const u8Array_t&)> ptp_cb_;
@@ -352,7 +354,7 @@ public:
           {
             correction_cb_(lidar_ptr_->correction_string_);
           }
-        } 
+        }
         else {
           LogWarning("cuda parser ret: %d, points_num: %d", ret, lidar_ptr_->frame_.points_num);
         }
@@ -363,6 +365,12 @@ public:
         }
         if (lidar_ptr_->frame_.fParam.remake_config.flag || lidar_ptr_->frame_.clear_every_frame) {
           std::fill_n(lidar_ptr_->frame_.points, lidar_ptr_->frame_.maxPacketPerFrame * lidar_ptr_->frame_.maxPointPerPacket, T_Point{});
+        }
+        if (!lidar_ptr_->frame_.depth_img.empty()) {
+              lidar_ptr_->frame_.depth_img.setTo(0.0f);
+        }
+        if (!lidar_ptr_->frame_.intensity_img.empty()) {
+              lidar_ptr_->frame_.intensity_img.setTo(0);
         }
         //clear udp packet vector
         resetFrame(packet_index, udp_packet_frame);
@@ -443,6 +451,8 @@ public:
   // assign callback fuction
   void RegRecvCallback(const std::function<void(const LidarDecodedFrame<T_Point>&)>& callback) {
     point_cloud_cb_ = callback;
+    depth_img_cb_ = callback;
+    intensity_img_cb_ = callback;
   }
 
   // assign callback fuction

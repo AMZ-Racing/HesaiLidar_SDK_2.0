@@ -450,15 +450,37 @@ int Udp4_7Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       float z = distance * this->sin_all_angle_[(elevation)];
       this->TransformPoint(x, y, z, frame.fParam.transform);
 
-      int point_index_rerank = point_index + point_num; 
-      int channel_index_remake = channel_index;
-      GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index_remake, frame.fParam.remake_config, point_index_rerank); 
-      if(point_index_rerank >= 0) { 
-        auto& ptinfo = frame.points[point_index_rerank]; 
-        set_x(ptinfo, x); 
-        set_y(ptinfo, y); 
-        set_z(ptinfo, z); 
-        set_ring(ptinfo, channel_index); 
+      // Map channel_index to ring_id using ATX two-group interleaving (User Manual §A.1.2).
+      // Ch 0–11: normal-only elevation range, maps 1:1 to rings 0–11.
+      // Ch 12–63: normal group, interleaved at odd rings 13,15,...,115.
+      // Ch 64–115: super-res group, interleaved at even rings 12,14,...,114.
+      int ring_id;
+      if (channel_index < 12) {
+        ring_id = channel_index;
+      } else if (channel_index < 64) {
+        ring_id = 2 * channel_index - 11;
+      } else {
+        ring_id = 2 * (channel_index - 64) + 12;
+      }
+
+      int point_index_rerank = point_index + point_num;
+      int channel_index_remake = ring_id;
+      GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index_remake, frame.fParam.remake_config, point_index_rerank);
+      if(point_index_rerank >= 0) {
+        const auto& rc = frame.fParam.remake_config;
+        if (rc.flag && !frame.depth_img.empty()) {
+          int col = point_index_rerank / rc.max_elev_scan;
+          int row = ring_id;
+          if (row < frame.depth_img.rows && col < frame.depth_img.cols) {
+            frame.depth_img.template at<float>(row, col) = distance;
+            frame.intensity_img.template at<uint8_t>(row, col) = pChnUnit->GetReflectivity();
+          }
+        }
+        auto& ptinfo = frame.points[point_index_rerank];
+        set_x(ptinfo, x);
+        set_y(ptinfo, y);
+        set_z(ptinfo, z);
+        set_ring(ptinfo, ring_id);
         set_intensity(ptinfo, pChnUnit->GetReflectivity());  
         set_timestamp(ptinfo, double(packetData.t.sensor_timestamp) / kMicrosecondToSecond);
         set_confidence(ptinfo, pChnUnit->GetConfidenceLevel());
@@ -515,6 +537,16 @@ int Udp4_7Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
       return -1;
     }
     frame.frame_init_ = true;
+    {
+      const auto& rc = frame.fParam.remake_config;
+      int img_rows = static_cast<int>(frame.laser_num);
+      if (rc.flag && img_rows > 0 && rc.max_azi_scan > 0) {
+        frame.depth_img.create(img_rows, rc.max_azi_scan, CV_32FC1);
+        frame.depth_img.setTo(0.0f);
+        frame.intensity_img.create(img_rows, rc.max_azi_scan, CV_8UC1);
+        frame.intensity_img.setTo(0);
+      }
+    }
   }
   if (pHeader->GetBlockNum() != frame.block_num
       || pHeader->GetLaserNum() != frame.laser_num

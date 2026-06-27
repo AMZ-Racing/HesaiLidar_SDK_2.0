@@ -730,7 +730,17 @@ class GeneralParser {
     if (rq.min_azi < 0) rq.min_azi = default_remake_config.min_azi;
     if (rq.max_azi < 0) rq.max_azi = default_remake_config.max_azi;
     if (rq.ring_azi_resolution < 0) rq.ring_azi_resolution = default_remake_config.ring_azi_resolution;
-    if (rq.max_azi_scan < 0) rq.max_azi_scan = default_remake_config.max_azi_scan;
+    if (rq.max_azi_scan < 0) {
+      // If min/max_azi differ from defaults (i.e. a partial FOV is configured),
+      // compute column count from the actual azimuth range so the image is tight
+      // with no empty columns. Fall back to the full-circle default only when the
+      // configured range matches the sensor's full sweep.
+      if (rq.min_azi != default_remake_config.min_azi || rq.max_azi != default_remake_config.max_azi) {
+        rq.max_azi_scan = static_cast<int>(std::round((rq.max_azi - rq.min_azi) / rq.ring_azi_resolution));
+      } else {
+        rq.max_azi_scan = default_remake_config.max_azi_scan;
+      }
+    }
 
     if (rq.min_elev < 0) rq.min_elev = default_remake_config.min_elev;
     if (rq.max_elev < 0) rq.max_elev = default_remake_config.max_elev;

@@ -16,8 +16,11 @@ target_link_libraries(lidar_lib INTERFACE
     ptcClient_lib
     source_lib
     serialClient_lib
-    Threads::Threads
-)
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${OpenCV_LIBS})
+
+target_include_directories(lidar_lib INTERFACE
+    ${OpenCV_INCLUDE_DIRS})
 
 # GPU 支持（可选）
 if(WITH_UDPPARSERGPU AND TARGET udpParserGpu_lib)
