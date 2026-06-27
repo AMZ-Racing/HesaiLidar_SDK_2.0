@@ -450,7 +450,6 @@ public:
 
   // assign callback fuction
   void RegRecvCallback(const std::function<void(const LidarDecodedFrame<T_Point>&)>& callback) {
-    // TODO: Is this the correct way of handling callback?
     point_cloud_cb_ = callback;
     depth_img_cb_ = callback;
     intensity_img_cb_ = callback;
