@@ -14,6 +14,79 @@
 | Pandar128E3X | -            | -            | -            | -            | -            | -            |
 | Pandar90E3X  | -            | -            | -            | -            | -            | -            |
 
+## AMZ Custom Modifications
+
+These changes extend the upstream SDK to support depth and intensity image generation inside the parsers. The ROS2 driver then publishes these as `sensor_msgs/Image` topics.
+
+### `CMakeLists.txt` / `libhesai/CMakeLists.txt` — OpenCV dependency
+
+OpenCV (`opencv2/core.hpp`) added as a required dependency to support `cv::Mat` image buffers inside `LidarDecodedFrame`. The ROS2 driver already had OpenCV; this extends that requirement into the SDK itself.
+
+### `libhesai/lidar_types.h` — image buffers in `LidarDecodedFrame`
+
+Two `cv::Mat` members added to `LidarDecodedFrame`:
+
+```cpp
+cv::Mat depth_img;      // CV_32FC1 — distance in metres per pixel
+cv::Mat intensity_img;  // CV_8UC1  — reflectivity per pixel
+```
+
+These are allocated in `DecodePacket` (once per frame) and filled in `ComputeXYZI` (once per point). The ROS2 driver reads them via `frame.depth_img` / `frame.intensity_img`.
+
+### `driver_param.h` — new `InputParam` fields
+
+Four fields added to `InputParam` to support image publishing from the ROS2 layer:
+
+| Field | Type | Description |
+|:------|:-----|:------------|
+| `send_depth_image_ros` | `bool` | Enable depth image publishing |
+| `send_intensity_image_ros` | `bool` | Enable intensity image publishing |
+| `ros_send_depth_image_topic` | `std::string` | ROS topic for depth image (default `hesai_depth_image`) |
+| `ros_send_intensity_image_topic` | `std::string` | ROS topic for intensity image (default `hesai_intensity_image`) |
+
+### `general_parser.h` — FOV-aware azimuth column count
+
+When `remake_config.max_azi_scan` is left unset (−1) and a partial azimuth FOV is configured (`fov_start` / `fov_end`), the column count is now derived from the actual azimuth range instead of always defaulting to the full-circle value. This prevents the image from having large empty column regions on the right when only a sector of the sweep is used:
+
+```cpp
+// Before: always used default_remake_config.max_azi_scan
+// After: if FOV differs from defaults, derive from configured range
+rq.max_azi_scan = round((rq.max_azi - rq.min_azi) / rq.ring_azi_resolution);
+```
+
+### `udp4_7_parser.h` — ATX
+
+**Problem:** ATX sends 116 channels in two elevation-sorted groups (normal Ch.0–63, super-resolution Ch.64–115), both covering the same FOV. Using `channel_index` as the image row stacked both groups vertically, duplicating the scene.
+
+**Fix — row assignment:** Applied the RingID interleaving formula from ATX User Manual §A.1.2 to map both groups into a single 116-row image:
+- Ch 0–11 → ring_id = channel_index (normal only, above super-res FOV)
+- Ch 12–63 → ring_id = `2 * channel_index - 11` (odd rows)
+- Ch 64–115 → ring_id = `2 * (channel_index - 64) + 12` (even rows)
+
+`set_ring` and `DoRemake` both use ring_id (not channel_index), keeping the point cloud ring field and depth image row consistent.
+
+### `udp4_3_parser.h` — AT128
+
+Image buffer allocation added to `DecodePacket` (height = `laser_num`, width = `max_azi_scan`). In `ComputeXYZI`, `row = channel_index` (AT128 channels are already ordered top-to-bottom by elevation) and `col` is derived from `DoRemake`'s azimuth bin output.
+
+### `udp1_4_parser.h` — OT128 / PandarN / JT128
+
+#### OT128
+
+**Problem:** OT128 has a strongly non-uniform channel distribution — 64 channels (Ch.25–88) span only 7.8° near the horizon at 0.125°/channel, while 8 channels (Ch.1–8) span 7.2° at the top edge at ~0.9°/channel. Placing rows by `channel_index` stretches the centre of the image and compresses the edges, producing a geometrically distorted result.
+
+**Fix — row assignment:** Elevation-angle-based geometric rectification using the calibrated elevation from the correction file:
+
+```
+row = round((max_elev - elevation_deg) / ring_elev_resolution)
+     = round((15.0 - elevation_deg) / 0.125)
+```
+
+This maps the full FOV (−25° to +15°) uniformly across 320 rows at 0.125°/row. `DoRemake` receives `row` (not `channel_index`) as its ring argument so that `frame.points[col * 320 + row]` aligns with `depth_img[row][col]`. `set_ring` still stores the physical channel index (0–127). Rows at elevation angles where no laser fires are left as zero.
+
+**Fix — image height:** Changed from `max_elev_scan` default (320, coincidentally correct for OT128 rectification) — kept at 320 for OT128, set to `laser_num` for all other sensors.
+
+
 ### 1.2 Operating Systems
 
 - Ubuntu 16/18/20/22.04 
