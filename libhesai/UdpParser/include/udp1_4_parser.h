@@ -484,14 +484,23 @@ int Udp1_4Parser<T_Point>::ComputeXYZI(LidarDecodedFrame<T_Point> &frame, uint32
       float z = distance * this->sin_all_angle_[(elevation)];
       this->TransformPoint(x, y, z, frame.fParam.transform);
       int point_index_rerank = point_index + point_num;
-      GeneralParser<T_Point>::DoRemake(azimuth, elevation, channel_index, frame.fParam.remake_config, point_index_rerank);
+      int remake_ring = channel_index;
+      if (this->lidar_type_ == STR_OT128 && this->get_correction_file_) {
+        const auto& rc_pre = frame.fParam.remake_config;
+        float elev_deg = this->correction.elevation[channel_index];
+        remake_ring = static_cast<int>((rc_pre.max_elev - elev_deg) / rc_pre.ring_elev_resolution + 0.5f);
+        remake_ring = std::max(0, std::min(remake_ring, rc_pre.max_elev_scan - 1));
+      }
+      GeneralParser<T_Point>::DoRemake(azimuth, elevation, remake_ring, frame.fParam.remake_config, point_index_rerank);
       if(point_index_rerank >= 0) {
         const auto& rc = frame.fParam.remake_config;
         if (rc.flag && !frame.depth_img.empty()) {
           int col = point_index_rerank / rc.max_elev_scan;
-          int row = point_index_rerank % rc.max_elev_scan;
-          frame.depth_img.template at<float>(row, col) = distance;
-          frame.intensity_img.template at<uint8_t>(row, col) = pChnUnit->GetReflectivity();
+          int row = remake_ring;
+          if (row < frame.depth_img.rows && col < frame.depth_img.cols) {
+            frame.depth_img.template at<float>(row, col) = distance;
+            frame.intensity_img.template at<uint8_t>(row, col) = pChnUnit->GetReflectivity();
+          }
         }
         auto& ptinfo = frame.points[point_index_rerank];
         set_x(ptinfo, x); 
@@ -555,10 +564,11 @@ int Udp1_4Parser<T_Point>::DecodePacket(LidarDecodedFrame<T_Point> &frame, const
     frame.frame_init_ = true;
     {
       const auto& rc = frame.fParam.remake_config;
-      if (rc.flag && rc.max_elev_scan > 0 && rc.max_azi_scan > 0) {
-        frame.depth_img.create(rc.max_elev_scan, rc.max_azi_scan, CV_32FC1);
+      int img_rows = (this->lidar_type_ == STR_OT128) ? rc.max_elev_scan : static_cast<int>(frame.laser_num);
+      if (rc.flag && img_rows > 0 && rc.max_azi_scan > 0) {
+        frame.depth_img.create(img_rows, rc.max_azi_scan, CV_32FC1);
         frame.depth_img.setTo(0.0f);
-        frame.intensity_img.create(rc.max_elev_scan, rc.max_azi_scan, CV_8UC1);
+        frame.intensity_img.create(img_rows, rc.max_azi_scan, CV_8UC1);
         frame.intensity_img.setTo(0);
       }
     }
